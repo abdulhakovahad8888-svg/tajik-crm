@@ -1,0 +1,162 @@
+═══════════════════════════════════════════════════
+  TAJIK AI CRM — ПОШАГОВАЯ ИНСТРУКЦИЯ ЗАПУСКА
+═══════════════════════════════════════════════════
+
+ИТОГ: бот в Telegram и Instagram отвечает клиентам,
+лиды появляются в CRM автоматически в реальном времени.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ШАГ 1 — SUPABASE (база данных)           ~10 минут
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Зайди на https://supabase.com → New Project
+2. Название: tajik-ai-crm, выбери регион (Frankfurt ближе всего)
+3. Запомни пароль базы данных!
+4. После создания → SQL Editor → New Query
+5. Вставь содержимое файла supabase_schema.sql → Run
+6. Перейди Settings → API:
+   - Скопируй "Project URL" → это SUPABASE_URL
+   - Скопируй "anon public" → это SUPABASE_ANON_KEY
+   - Скопируй "service_role" → это SUPABASE_SERVICE_KEY
+7. Перейди Table Editor → businesses → скопируй id тестовой записи
+   → это BUSINESS_ID
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ШАГ 2 — TELEGRAM БОТ                     ~5 минут
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Открой Telegram → найди @BotFather
+2. Напиши /newbot
+3. Название бота: "Avicena Life" (или твой бизнес)
+4. Username: avicena_life_bot (должен заканчиваться на _bot)
+5. Скопируй токен → это TELEGRAM_BOT_TOKEN
+
+6. Узнай свой chat_id:
+   - Найди @userinfobot в Telegram
+   - Напиши ему /start
+   - Скопируй "Id: 123456789" → это MANAGER_CHAT_ID
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ШАГ 3 — ANTHROPIC API (AI-мозг)          ~3 минуты
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Зайди на https://console.anthropic.com
+2. API Keys → Create Key
+3. Скопируй ключ → это ANTHROPIC_API_KEY
+4. Пополни баланс на $5 (хватит на тысячи диалогов)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ШАГ 4 — RAILWAY (хостинг)                ~10 минут
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Зайди на https://railway.app → Login with GitHub
+2. New Project → Deploy from GitHub repo
+   (или: New Project → Empty Project → Add Service → GitHub Repo)
+
+3. Загрузи код:
+   - Создай папку tajik-crm-backend
+   - Положи туда: main.py, requirements.txt, railway.toml
+   - Создай GitHub репозиторий и запушь
+   - Подключи в Railway
+
+4. В Railway → Variables → добавь все переменные из .env.example:
+   SUPABASE_URL=...
+   SUPABASE_SERVICE_KEY=...
+   ANTHROPIC_API_KEY=...
+   TELEGRAM_BOT_TOKEN=...
+   MANAGER_CHAT_ID=...
+   BUSINESS_ID=...
+   INSTAGRAM_VERIFY_TOKEN=tajik_crm_secret_2025
+   INSTAGRAM_APP_SECRET=... (пока можно пропустить)
+
+5. Railway даст URL типа: https://tajik-crm.railway.app
+   → Скопируй → это WEBHOOK_BASE_URL (добавь в Variables)
+
+6. Открой в браузере:
+   https://твой-домен.railway.app/setup/telegram
+   → Должен ответить: {"result": true, "description": "Webhook was set"}
+   → Готово! Telegram бот работает.
+
+7. Проверь: напиши /start своему боту → он должен ответить!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ШАГ 5 — INSTAGRAM (сложнее, но реально)  ~30 минут
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ТРЕБОВАНИЯ:
+✅ Instagram Business аккаунт (не личный)
+✅ Подключённая Facebook Page
+✅ Аккаунт разработчика на Meta
+
+1. Зайди на https://developers.facebook.com → My Apps → Create App
+2. Тип: Business → Далее
+3. Добавь продукт: "Messenger" и "Webhooks"
+
+4. Messenger → Settings:
+   - Access Tokens → Generate Token для своей страницы
+   → это INSTAGRAM_ACCESS_TOKEN
+   - Скопируй Page ID → это INSTAGRAM_PAGE_ID
+
+5. Webhooks → New Subscription → Instagram:
+   - Callback URL: https://твой-домен.railway.app/webhook/instagram
+   - Verify Token: tajik_crm_secret_2025
+   - Поля: messages, messaging_postbacks
+   → Нажми Verify and Save
+
+6. App Settings → Basic:
+   - Скопируй App Secret → это INSTAGRAM_APP_SECRET
+   - Добавь в Railway Variables
+
+7. Обнови INSTAGRAM_APP_SECRET в Railway → Redeploy
+
+8. ТЕСТ: напиши в Direct своего Instagram бизнес-аккаунта
+   → бот должен ответить!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ШАГ 6 — ПОДКЛЮЧИТЬ CRM К API             ~5 минут
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+В файле tajik-ai-crm-app.html найди строку:
+  const API_BASE = ""
+
+Замени на:
+  const API_BASE = "https://твой-домен.railway.app"
+
+Теперь CRM будет загружать реальные лиды из базы!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ИТОГОВАЯ СХЕМА
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Клиент пишет в Telegram/Instagram
+        ↓
+  Railway (main.py) получает сообщение
+        ↓
+  Claude AI генерирует ответ
+        ↓
+  Ответ отправляется клиенту
+        ↓
+  Лид сохраняется в Supabase
+        ↓
+  CRM получает обновление в реальном времени
+        ↓
+  Менеджер получает уведомление в Telegram
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+СТОИМОСТЬ В МЕСЯЦ
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Supabase Free:     $0  (до 500MB, 50k запросов)
+  Railway Starter:   $5  (или бесплатно первые $5)
+  Anthropic Claude:  ~$2-5 (зависит от объёма диалогов)
+  ─────────────────────────
+  ИТОГО:             ~$5-10/мес на инфраструктуру
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ПОДДЕРЖКА
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Если что-то не работает — проверь:
+1. Railway → Logs (видны все ошибки)
+2. Supabase → Table Editor → leads (видны лиды)
+3. https://твой-домен.railway.app/health → {"status":"ok"}
