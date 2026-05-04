@@ -1,9 +1,9 @@
 """
-TAJIK AI CRM — Сервер с OpenAI
+TAJIK AI CRM — Сервер с DeepSeek AI
 Telegram бот + Instagram webhook
 """
 
-import os, json, hmac, hashlib
+import os, json
 from datetime import datetime
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, BackgroundTasks
@@ -29,44 +29,59 @@ DEEPSEEK_KEY    = os.getenv("DEEPSEEK_API_KEY")
 TG_API          = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
 # ════════════════════════════════════════════
-# OPENAI — УМНЫЙ ОТВЕТ
+# DEEPSEEK — ЖИВОЙ AI ОТВЕТ
 # ════════════════════════════════════════════
 
 async def get_ai_response(user_message: str, history: list) -> str:
     messages = [
-        {"role": "system", "content": """Ты AI-менеджер для Avicena Life в Таджикистане.
-Отвечай на языке клиента: таджикский, русский или узбекский.
+        {"role": "system", "content": """Ты живой AI-менеджер по имени Алӣ для Avicena Life в Таджикистане.
+Ты ведёшь настоящий живой разговор — слушаешь клиента и отвечаешь именно на его слова.
+Никогда не повторяй один и тот же ответ дважды.
 
 ТОВАРЫ:
-- DiaNova — 280 сомони
-- Maximus Complex — 450 сомони
-- Testofertil — 520 сомони
+- DiaNova — 280 сомони (витамины для женщин)
+- Maximus Complex — 450 сомони (для мужчин)
+- Testofertil — 520 сомони (репродуктивное здоровье)
 - Консультация — 200 сомони
-- Avicena Plus — 380 сомони
+- Avicena Plus — 380 сомони (иммунитет)
 
-Доставка по Душанбе бесплатно от 300 сомони. Регионы — 30 сомони.
+Доставка Душанбе — бесплатно от 300 с. Регионы — 30 с.
 
-ПРАВИЛА:
-- Отвечай кратко (2-4 предложения), дружелюбно, с эмодзи
-- Если хочет купить — попроси имя и телефон
+ПОВЕДЕНИЕ:
+- Отвечай коротко (1-3 предложения), живо, на языке клиента (таджикский/русский/узбекский)
+- Если спрашивают "шумо ки?" или "кто ты?" → "Ман Алӣ — AI-ёрдамчии Avicena Life 😊"
+- Если "намехом" или "не хочу" → спроси почему или предложи другой товар
+- Если грубит → вежливо извинись и предложи помощь
+- Если спрашивает цену → назови цену и спроси хочет ли заказать
+- Если хочет купить → попроси имя и телефон
+- Если даёт телефон → поблагодари и скажи что менеджер перезвонит в течение 15 минут
 - НЕ ставь диагнозы и медицинские советы
-- После получения телефона — скажи что менеджер перезвонит"""}
+- Используй эмодзи умеренно"""}
     ]
-    for m in history[-6:]:
-        messages.append({"role": m["role"] if m["role"] != "bot" else "assistant", "content": m["content"]})
+
+    # История последних 10 сообщений для контекста
+    for m in history[-10:]:
+        role = "assistant" if m["role"] == "bot" else "user"
+        messages.append({"role": role, "content": m["content"]})
+
     messages.append({"role": "user", "content": user_message})
 
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with httpx.AsyncClient(timeout=20) as client:
             r = await client.post(
                 "https://api.deepseek.com/v1/chat/completions",
                 headers={"Authorization": f"Bearer {DEEPSEEK_KEY}"},
-                json={"model": "deepseek-chat", "messages": messages, "max_tokens": 300}
+                json={
+                    "model": "deepseek-chat",
+                    "messages": messages,
+                    "max_tokens": 200,
+                    "temperature": 0.8
+                }
             )
             return r.json()["choices"][0]["message"]["content"]
     except Exception as e:
-        print(f"OpenAI error: {e}")
-        return "Саломи алейкум! Менеджер мо ба шумо тамос мегирад. Рақами телефонатонро нависед 📞"
+        print(f"DeepSeek error: {e}")
+        return "Бубахшед, хато рӯй дод. Лутфан дубора кӯшиш кунед 🙏"
 
 
 async def extract_lead_info(messages: list) -> dict:
@@ -84,7 +99,8 @@ async def extract_lead_info(messages: list) -> dict:
 
 Диалог:
 {conversation}"""}],
-                    "max_tokens": 150
+                    "max_tokens": 150,
+                    "temperature": 0
                 }
             )
         text = r.json()["choices"][0]["message"]["content"].strip()
@@ -177,12 +193,12 @@ async def process_telegram(data: dict):
 
 Хуш омадед ба <b>Avicena Life</b> 🌿
 
-Моҳои мо маҳсулоти сифатнок дорем:
+Маҳсулоти мо:
 • DiaNova — 280 сомонӣ
 • Maximus Complex — 450 сомонӣ
 • Testofertil — 520 сомонӣ
 
-Чӣ тавр ёрӣ расонам? 😊""")
+Ман Алӣ — AI-ёрдамчии шумо. Чӣ тавр ёрӣ расонам? 😊""")
         return
 
     lead = get_lead(chat_id, "telegram")
@@ -203,15 +219,19 @@ async def process_telegram(data: dict):
     if len(history) >= 2:
         info = await extract_lead_info(history)
         update = {}
-        if info.get("name"):   update["name"]    = info["name"]
-        if info.get("product"): update["product"] = info["product"]
-        if info.get("city"):   update["city"]    = info["city"]
+        if info.get("name") and lead.get("name") in [first_name, f"{first_name} @{username}"]:
+            update["name"] = info["name"]
+        if info.get("product"):
+            update["product"] = info["product"]
+        if info.get("city"):
+            update["city"] = info["city"]
 
         if info.get("phone") and not lead.get("phone"):
             update["phone"]      = info["phone"]
             update["status"]     = "work"
             update["ai_summary"] = f"Клиент интересуется {info.get('product','товаром')}. Телефон получен."
-            if update: update_lead(lead_id, update); lead.update(update)
+            update_lead(lead_id, update)
+            lead.update(update)
             await notify_manager(lead, "telegram")
         elif update:
             update_lead(lead_id, update)
@@ -224,8 +244,8 @@ async def process_telegram(data: dict):
 @app.get("/webhook/instagram")
 async def ig_verify(request: Request):
     p = dict(request.query_params)
-    if p.get("hub.verify_token") == os.getenv("INSTAGRAM_VERIFY_TOKEN","tajik_crm_secret_2025"):
-        return PlainTextResponse(p.get("hub.challenge",""))
+    if p.get("hub.verify_token") == os.getenv("INSTAGRAM_VERIFY_TOKEN", "tajik_crm_secret_2025"):
+        return PlainTextResponse(p.get("hub.challenge", ""))
     return PlainTextResponse("Forbidden", status_code=403)
 
 @app.post("/webhook/instagram")
@@ -257,8 +277,11 @@ async def process_instagram(data: dict):
             if len(history) >= 2:
                 info = await extract_lead_info(history)
                 if info.get("phone") and not lead.get("phone"):
-                    update_lead(lead_id, {"phone": info["phone"], "status": "work",
-                        "ai_summary": f"Instagram лид. Интерес: {info.get('product','—')}"})
+                    update_lead(lead_id, {
+                        "phone": info["phone"], "status": "work",
+                        "product": info.get("product"),
+                        "ai_summary": f"Instagram лид. Интерес: {info.get('product','—')}"
+                    })
                     lead["phone"] = info["phone"]
                     await notify_manager(lead, "instagram")
 
@@ -269,7 +292,8 @@ async def get_ig_name(user_id: str) -> str:
             r = await client.get(f"https://graph.facebook.com/v18.0/{user_id}",
                 params={"fields": "name", "access_token": token})
             return r.json().get("name", "Instagram клиент")
-    except: return "Instagram клиент"
+    except:
+        return "Instagram клиент"
 
 async def send_ig_message(recipient_id: str, text: str):
     token   = os.getenv("INSTAGRAM_ACCESS_TOKEN")
@@ -318,13 +342,16 @@ async def api_stats():
     total = len(data)
     sales = len([l for l in data if l["status"] == "done"])
     rev   = sum(l["amount"] for l in data if l["status"] == "done")
-    return {"total": total, "in_work": len([l for l in data if l["status"]=="work"]),
-            "sales": sales, "revenue": rev,
-            "conversion": round(sales/total*100,1) if total else 0}
+    return {
+        "total": total,
+        "in_work": len([l for l in data if l["status"] == "work"]),
+        "sales": sales, "revenue": rev,
+        "conversion": round(sales / total * 100, 1) if total else 0
+    }
 
 @app.get("/setup/telegram")
 async def setup_tg():
-    base = os.getenv("WEBHOOK_BASE_URL","")
+    base = os.getenv("WEBHOOK_BASE_URL", "")
     async with httpx.AsyncClient() as client:
         r = await client.post(f"{TG_API}/setWebhook",
             json={"url": f"{base}/webhook/telegram"})
