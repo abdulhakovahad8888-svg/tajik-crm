@@ -1,5 +1,5 @@
 """
-TAJIK AI CRM — Сервер с DeepSeek AI
+TAJIK AI CRM — Сервер с Google Gemini
 Telegram бот + Instagram webhook
 """
 
@@ -29,12 +29,18 @@ GEMINI_KEY      = os.getenv("GEMINI_API_KEY")
 TG_API          = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
 # ════════════════════════════════════════════
-# DEEPSEEK — ЖИВОЙ AI ОТВЕТ
+# GEMINI — ЖИВОЙ AI ОТВЕТ
 # ════════════════════════════════════════════
 
 async def get_ai_response(user_message: str, history: list) -> str:
-    messages = [
-        {"role": "system", "content": """Ты живой AI-менеджер по имени Алӣ для Avicena Life в Таджикистане.
+    # Строим историю для Gemini
+    contents = []
+    for m in history[-10:]:
+        role = "model" if m["role"] == "bot" else "user"
+        contents.append({"role": role, "parts": [{"text": m["content"]}]})
+    contents.append({"role": "user", "parts": [{"text": user_message}]})
+
+    system_prompt = """Ты живой AI-менеджер по имени Алӣ для Avicena Life в Таджикистане.
 Ты ведёшь настоящий живой разговор — слушаешь клиента и отвечаешь именно на его слова.
 Никогда не повторяй один и тот же ответ дважды.
 
@@ -51,34 +57,24 @@ async def get_ai_response(user_message: str, history: list) -> str:
 - Отвечай коротко (1-3 предложения), живо, на языке клиента (таджикский/русский/узбекский)
 - Если спрашивают "шумо ки?" или "кто ты?" → "Ман Алӣ — AI-ёрдамчии Avicena Life 😊"
 - Если "намехом" или "не хочу" → спроси почему или предложи другой товар
-- Если грубит → вежливо извинись и предложи помощь
 - Если спрашивает цену → назови цену и спроси хочет ли заказать
 - Если хочет купить → попроси имя и телефон
-- Если даёт телефон → поблагодари и скажи что менеджер перезвонит в течение 15 минут
+- Если даёт телефон → поблагодари, скажи менеджер перезвонит через 15 минут
 - НЕ ставь диагнозы и медицинские советы
-- Используй эмодзи умеренно"""}
-    ]
-
-    # История последних 10 сообщений для контекста
-    for m in history[-10:]:
-        role = "assistant" if m["role"] == "bot" else "user"
-        messages.append({"role": role, "content": m["content"]})
-
-    messages.append({"role": "user", "content": user_message})
+- Используй эмодзи умеренно"""
 
     try:
         async with httpx.AsyncClient(timeout=20) as client:
             r = await client.post(
-                "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-                headers={"Authorization": f"Bearer {GEMINI_KEY}"},
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}",
                 json={
-                    "model": "gemini-1.5-flash",
-                    "messages": messages,
-                    "max_tokens": 200,
-                    "temperature": 0.8
+                    "system_instruction": {"parts": [{"text": system_prompt}]},
+                    "contents": contents,
+                    "generationConfig": {"maxOutputTokens": 200, "temperature": 0.8}
                 }
             )
-            return r.json()["choices"][0]["message"]["content"]
+            data = r.json()
+            return data["candidates"][0]["content"]["parts"][0]["text"]
     except Exception as e:
         print(f"Gemini error: {e}")
         return "Бубахшед, хато рӯй дод. Лутфан дубора кӯшиш кунед 🙏"
@@ -89,21 +85,18 @@ async def extract_lead_info(messages: list) -> dict:
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.post(
-                "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-                headers={"Authorization": f"Bearer {GEMINI_KEY}"},
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}",
                 json={
-                    "model": "gemini-1.5-flash",
-                    "messages": [{"role": "user", "content": f"""
+                    "contents": [{"role": "user", "parts": [{"text": f"""
 Извлеки из диалога данные клиента. Ответь ТОЛЬКО JSON без markdown:
 {{"name": "имя или null", "phone": "телефон или null", "product": "товар или null", "city": "город или null"}}
 
 Диалог:
-{conversation}"""}],
-                    "max_tokens": 150,
-                    "temperature": 0
+{conversation}"""}]}],
+                    "generationConfig": {"maxOutputTokens": 150, "temperature": 0}
                 }
             )
-        text = r.json()["choices"][0]["message"]["content"].strip()
+        text = r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
         start, end = text.find('{'), text.rfind('}') + 1
         return json.loads(text[start:end]) if start >= 0 else {}
     except:
@@ -219,12 +212,9 @@ async def process_telegram(data: dict):
     if len(history) >= 2:
         info = await extract_lead_info(history)
         update = {}
-        if info.get("name") and lead.get("name") in [first_name, f"{first_name} @{username}"]:
-            update["name"] = info["name"]
-        if info.get("product"):
-            update["product"] = info["product"]
-        if info.get("city"):
-            update["city"] = info["city"]
+        if info.get("name"): update["name"] = info["name"]
+        if info.get("product"): update["product"] = info["product"]
+        if info.get("city"): update["city"] = info["city"]
 
         if info.get("phone") and not lead.get("phone"):
             update["phone"]      = info["phone"]
