@@ -28,19 +28,7 @@ BUSINESS_ID     = os.getenv("BUSINESS_ID")
 GEMINI_KEY      = os.getenv("GEMINI_API_KEY")
 TG_API          = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
-# ════════════════════════════════════════════
-# GEMINI — ЖИВОЙ AI ОТВЕТ
-# ════════════════════════════════════════════
-
-async def get_ai_response(user_message: str, history: list) -> str:
-    # Строим историю для Gemini
-    contents = []
-    for m in history[-10:]:
-        role = "model" if m["role"] == "bot" else "user"
-        contents.append({"role": role, "parts": [{"text": m["content"]}]})
-    contents.append({"role": "user", "parts": [{"text": user_message}]})
-
-    system_prompt = """Ты живой AI-менеджер по имени Алӣ для Avicena Life в Таджикистане.
+SYSTEM_PROMPT = """Ты живой AI-менеджер по имени Алӣ для Avicena Life в Таджикистане.
 Ты ведёшь настоящий живой разговор — слушаешь клиента и отвечаешь именно на его слова.
 Никогда не повторяй один и тот же ответ дважды.
 
@@ -55,29 +43,71 @@ async def get_ai_response(user_message: str, history: list) -> str:
 
 ПОВЕДЕНИЕ:
 - Отвечай коротко (1-3 предложения), живо, на языке клиента (таджикский/русский/узбекский)
-- Если спрашивают "шумо ки?" или "кто ты?" → "Ман Алӣ — AI-ёрдамчии Avicena Life 😊"
-- Если "намехом" или "не хочу" → спроси почему или предложи другой товар
-- Если спрашивает цену → назови цену и спроси хочет ли заказать
-- Если хочет купить → попроси имя и телефон
-- Если даёт телефон → поблагодари, скажи менеджер перезвонит через 15 минут
+- Если спрашивают "шумо ки?" или "кто ты?" — скажи "Ман Алӣ — AI-ёрдамчии Avicena Life"
+- Если "намехом" или "не хочу" — спроси почему или предложи другой товар
+- Если спрашивает цену — назови цену и спроси хочет ли заказать
+- Если хочет купить — попроси имя и телефон
+- Если даёт телефон — поблагодари, скажи менеджер перезвонит через 15 минут
 - НЕ ставь диагнозы и медицинские советы
 - Используй эмодзи умеренно"""
+
+# ════════════════════════════════════════════
+# GEMINI — ЖИВОЙ AI ОТВЕТ
+# ════════════════════════════════════════════
+
+async def get_ai_response(user_message: str, history: list) -> str:
+    # Gemini требует чередование user/model, нельзя два подряд от одного
+    contents = []
+    last_role = None
+    for m in history[-10:]:
+        role = "model" if m["role"] == "bot" else "user"
+        # Пропускаем если два подряд от одного
+        if role == last_role:
+            continue
+        contents.append({"role": role, "parts": [{"text": m["content"]}]})
+        last_role = role
+
+    # Если последний был user — нельзя добавить ещё user, пропускаем историю
+    if last_role == "user":
+        # Убираем последний user чтобы добавить новый
+        contents = contents[:-1]
+
+    contents.append({"role": "user", "parts": [{"text": user_message}]})
+
+    # Если первый элемент model — Gemini упадёт, нужно чтобы первый был user
+    if contents and contents[0]["role"] == "model":
+        contents = contents[1:]
 
     try:
         async with httpx.AsyncClient(timeout=20) as client:
             r = await client.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}",
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_KEY}",
                 json={
-                    "system_instruction": {"parts": [{"text": system_prompt}]},
+                    "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
                     "contents": contents,
-                    "generationConfig": {"maxOutputTokens": 200, "temperature": 0.8}
+                    "generationConfig": {"maxOutputTokens": 200, "temperature": 0.8},
+                    "safetySettings": [
+                        {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                        {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                        {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+                    ]
                 }
             )
             data = r.json()
-            return data["candidates"][0]["content"]["parts"][0]["text"]
+            print(f"Gemini raw: {json.dumps(data)[:500]}")
+
+            if "candidates" in data and len(data["candidates"]) > 0:
+                return data["candidates"][0]["content"]["parts"][0]["text"]
+            elif "error" in data:
+                print(f"Gemini API error: {data['error']}")
+                return f"Бубахшед! Ман ҳозир банд ҳастам. Менеджер мо ба шумо тамос мегирад 📞"
+            else:
+                print(f"Gemini unknown response: {data}")
+                return "Салом! Чӣ тавр ёрӣ расонам? Маҳсулоти мо: DiaNova 280с, Maximus 450с, Testofertil 520с 🌿"
     except Exception as e:
-        print(f"Gemini error: {e}")
-        return "Бубахшед, хато рӯй дод. Лутфан дубора кӯшиш кунед 🙏"
+        print(f"Gemini exception: {e}")
+        return "Салом! Ман Алӣ аз Avicena Life. Чӣ тавр кӯмак кунам? 😊"
 
 
 async def extract_lead_info(messages: list) -> dict:
@@ -85,7 +115,7 @@ async def extract_lead_info(messages: list) -> dict:
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}",
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_KEY}",
                 json={
                     "contents": [{"role": "user", "parts": [{"text": f"""
 Извлеки из диалога данные клиента. Ответь ТОЛЬКО JSON без markdown:
@@ -96,9 +126,12 @@ async def extract_lead_info(messages: list) -> dict:
                     "generationConfig": {"maxOutputTokens": 150, "temperature": 0}
                 }
             )
-        text = r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-        start, end = text.find('{'), text.rfind('}') + 1
-        return json.loads(text[start:end]) if start >= 0 else {}
+            data = r.json()
+            if "candidates" not in data:
+                return {}
+            text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            start, end = text.find('{'), text.rfind('}') + 1
+            return json.loads(text[start:end]) if start >= 0 else {}
     except:
         return {}
 
