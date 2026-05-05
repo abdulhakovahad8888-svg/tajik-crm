@@ -25,7 +25,7 @@ supabase: Client = create_client(
 TELEGRAM_TOKEN  = os.getenv("TELEGRAM_BOT_TOKEN")
 MANAGER_CHAT_ID = os.getenv("MANAGER_CHAT_ID")
 BUSINESS_ID     = os.getenv("BUSINESS_ID")
-DEEPSEEK_KEY    = os.getenv("DEEPSEEK_API_KEY")
+GEMINI_KEY      = os.getenv("GEMINI_API_KEY")
 TG_API          = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
 # ════════════════════════════════════════════
@@ -69,10 +69,10 @@ async def get_ai_response(user_message: str, history: list) -> str:
     try:
         async with httpx.AsyncClient(timeout=20) as client:
             r = await client.post(
-                "https://api.deepseek.com/v1/chat/completions",
-                headers={"Authorization": f"Bearer {DEEPSEEK_KEY}"},
+                "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+                headers={"Authorization": f"Bearer {GEMINI_KEY}"},
                 json={
-                    "model": "deepseek-chat",
+                    "model": "gemini-1.5-flash",
                     "messages": messages,
                     "max_tokens": 200,
                     "temperature": 0.8
@@ -80,7 +80,7 @@ async def get_ai_response(user_message: str, history: list) -> str:
             )
             return r.json()["choices"][0]["message"]["content"]
     except Exception as e:
-        print(f"DeepSeek error: {e}")
+        print(f"Gemini error: {e}")
         return "Бубахшед, хато рӯй дод. Лутфан дубора кӯшиш кунед 🙏"
 
 
@@ -89,10 +89,10 @@ async def extract_lead_info(messages: list) -> dict:
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.post(
-                "https://api.deepseek.com/v1/chat/completions",
-                headers={"Authorization": f"Bearer {DEEPSEEK_KEY}"},
+                "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+                headers={"Authorization": f"Bearer {GEMINI_KEY}"},
                 json={
-                    "model": "deepseek-chat",
+                    "model": "gemini-1.5-flash",
                     "messages": [{"role": "user", "content": f"""
 Извлеки из диалога данные клиента. Ответь ТОЛЬКО JSON без markdown:
 {{"name": "имя или null", "phone": "телефон или null", "product": "товар или null", "city": "город или null"}}
