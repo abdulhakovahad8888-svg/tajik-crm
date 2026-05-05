@@ -81,7 +81,7 @@ async def get_ai_response(user_message: str, history: list) -> str:
     try:
         async with httpx.AsyncClient(timeout=20) as client:
             r = await client.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_KEY}",
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}",
                 json={
                     "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
                     "contents": contents,
@@ -115,7 +115,7 @@ async def extract_lead_info(messages: list) -> dict:
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_KEY}",
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}",
                 json={
                     "contents": [{"role": "user", "parts": [{"text": f"""
 Извлеки из диалога данные клиента. Ответь ТОЛЬКО JSON без markdown:
