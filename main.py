@@ -7,7 +7,7 @@ import os, json, re
 from datetime import datetime
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, BackgroundTasks
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
 from supabase import create_client, Client
@@ -113,9 +113,6 @@ def product_price(product: str | None) -> int | None:
 
 
 def local_sales_reply(user_message: str, history: list | None = None) -> str:
-    """Жёсткий локальный менеджер Avicena Life без Gemini.
-    Цель: коротко, понятно, без странных фраз и без повторов.
-    """
     t = normalize_text(user_message)
     lang = client_language(user_message)
     product = detect_product(t) or last_known_product(history)
@@ -133,17 +130,16 @@ def local_sales_reply(user_message: str, history: list | None = None) -> str:
         if lang == "ru":
             return "Принял номер. Менеджер Avicena Life свяжется с вами в течение 15 минут 📞"
         if lang == "uz":
-            return "Raqamingizni oldim. Avicena Life menejeri 15 daqiqa ichida siz bilan bog‘lanadi 📞"
+            return "Raqamingizni oldim. Avicena Life menejeri 15 daqiqa ichida siz bilan bog'lanadi 📞"
         return "Рақаматонро гирифтам. Менеджери Avicena Life то 15 дақиқа бо шумо тамос мегирад 📞"
 
     if asks_identity:
         if lang == "ru":
             return "Я Алӣ — AI-помощник Avicena Life. Отвечаю по товарам, ценам и заказам."
         if lang == "uz":
-            return "Men Ali — Avicena Life AI-yordamchisiman. Mahsulot, narx va buyurtma bo‘yicha yordam beraman."
+            return "Men Ali — Avicena Life AI-yordamchisiman. Mahsulot, narx va buyurtma bo'yicha yordam beraman."
         return "Ман Алӣ — AI-ёрдамчии Avicena Life. Дар бораи маҳсулот, нарх ва фармоиш кӯмак мекунам."
 
-    # Цена конкретного товара
     if asks_price and product and price:
         if lang == "ru":
             return f"{product} — {price} сомони. Хотите оформить заказ?"
@@ -151,7 +147,6 @@ def local_sales_reply(user_message: str, history: list | None = None) -> str:
             return f"{product} — {price} somoniy. Buyurtma berasizmi?"
         return f"{product} — {price} сомонӣ. Фармоиш медиҳед?"
 
-    # Пользователь согласился после цены / товара
     if wants_buy and product:
         if lang == "ru":
             return "Хорошо. Отправьте имя, номер телефона и город доставки. Менеджер подтвердит заказ."
@@ -159,7 +154,6 @@ def local_sales_reply(user_message: str, history: list | None = None) -> str:
             return "Yaxshi. Ism, telefon raqam va yetkazib berish shahrini yuboring. Menejer buyurtmani tasdiqlaydi."
         return "Хуб. Ном, рақами телефон ва шаҳри дастрасониро фиристед. Менеджер фармоишро тасдиқ мекунад."
 
-    # Пользователь просто согласился, но товар неясен
     if wants_buy and not product:
         if lang == "ru":
             return "Хорошо. Какой товар нужен: DiaNova, Maximus Complex, Testofertil или Avicena Plus?"
@@ -171,14 +165,14 @@ def local_sales_reply(user_message: str, history: list | None = None) -> str:
         if lang == "ru":
             return "Понял. Можете написать причину: цена, нет доверия или товар не подходит?"
         if lang == "uz":
-            return "Tushunarli. Sababi narxmi, ishonch yo‘qmi yoki mahsulot mos emasmi?"
+            return "Tushunarli. Sababi narxmi, ishonch yo'qmi yoki mahsulot mos emasmi?"
         return "Фаҳмо. Сабабаш нарх аст, боварӣ нест ё маҳсулот мувофиқ нест?"
 
     if insult:
         if lang == "ru":
             return "Понимаю. Я отвечаю только по товарам Avicena Life: цена, состав, доставка и заказ. Какой вопрос у вас?"
         if lang == "uz":
-            return "Tushundim. Men Avicena Life mahsulotlari bo‘yicha javob beraman: narx, tarkib, yetkazib berish va buyurtma. Savolingiz nima?"
+            return "Tushundim. Men Avicena Life mahsulotlari bo'yicha javob beraman: narx, tarkib, yetkazib berish va buyurtma. Savolingiz nima?"
         return "Фаҳмо. Ман танҳо дар бораи маҳсулоти Avicena Life ҷавоб медиҳам: нарх, таркиб, дастрасонӣ ва фармоиш. Саволатон чист?"
 
     if has_greet:
@@ -188,7 +182,6 @@ def local_sales_reply(user_message: str, history: list | None = None) -> str:
             return "Salom. Men Ali, Avicena Life yordamchisiman. Qaysi mahsulot qiziqtiryapti: DiaNova, Maximus Complex yoki Testofertil?"
         return "Салом. Ман Алӣ, ёрдамчии Avicena Life. Кадом маҳсулот лозим аст: DiaNova, Maximus Complex ё Testofertil?"
 
-    # Интерес по товару без вопроса цены
     if product == "DiaNova":
         if lang == "ru":
             return "DiaNova — БАД для поддержки организма при контроле сахара. Цена 280 сомони. Хотите заказать?"
@@ -206,7 +199,6 @@ def local_sales_reply(user_message: str, history: list | None = None) -> str:
             return "Avicena Plus — комплекс для поддержки иммунитета. Цена 380 сомони. Хотите заказать?"
         return "Avicena Plus — комплекс барои дастгирии иммунитет. Нархаш 380 сомонӣ. Фармоиш медиҳед?"
 
-    # Общая цена без товара
     if asks_price:
         if lang == "ru":
             return "Цены: DiaNova — 280с, Maximus Complex — 450с, Testofertil — 520с, Avicena Plus — 380с. Какой товар интересует?"
@@ -222,7 +214,7 @@ def local_sales_reply(user_message: str, history: list | None = None) -> str:
 
 
 # ════════════════════════════════════════════
-# GEMINI — AI ОТВЕТ + ЛОКАЛЬНЫЙ FALLBACK
+# AI ОТВЕТ + ЛОКАЛЬНЫЙ FALLBACK
 # ════════════════════════════════════════════
 
 async def get_ai_response(user_message: str, history: list) -> str:
@@ -561,6 +553,30 @@ async def setup_tg():
 @app.get("/health")
 async def health():
     return {"status": "ok", "time": datetime.now().isoformat()}
+
+@app.get("/privacy")
+async def privacy():
+    return HTMLResponse("""<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="UTF-8"><title>Privacy Policy — Avicena Life</title></head>
+<body style="font-family:sans-serif;max-width:700px;margin:40px auto;padding:0 20px">
+<h1>Privacy Policy</h1>
+<p><strong>Avicena Life CRM</strong> — автоматизированная система обработки обращений клиентов.</p>
+<h2>Какие данные собираем</h2>
+<ul>
+  <li>Имя клиента</li>
+  <li>Номер телефона</li>
+  <li>Содержание сообщений (Instagram, Telegram)</li>
+  <li>Город доставки</li>
+</ul>
+<h2>Как используем данные</h2>
+<p>Данные используются исключительно для обработки заказов и связи с клиентами. Данные не передаются третьим лицам.</p>
+<h2>Хранение данных</h2>
+<p>Данные хранятся в защищённой базе Supabase на серверах в ЕС.</p>
+<h2>Контакт</h2>
+<p>По вопросам конфиденциальности: <a href="mailto:abdulhakov.ahad8888@gmail.com">abdulhakov.ahad8888@gmail.com</a></p>
+</body>
+</html>""")
 
 if __name__ == "__main__":
     import uvicorn
